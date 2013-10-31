@@ -11,19 +11,22 @@ my $maxlines = 0;         # > 0: output lines 0 .. $maxlines
 my $taillines = 0;        # > 0: output lines -$taillines .. -1
 my $follow = 0;           # set: follow output with `tail -f`
 my $hideraw = 1;          # set: hide *.messaging.ops.raw messages
+#my $hideheartbeat = 1;    # set: hide ConnectionHeartbeat commands
 my @skipsources = ();     # set: skip messages with these sources
+my @skipmessages = ();    # set: skip messages with these message types
 my $strip_u = 1;          # clothes are optional when reading logfiles (strip 'u' designator on unicode strings)
 my $highlightcontent = 1; # set: highlight the 'content=' key in message bodies
 my $debug = 0;
 GetOptions(
-  'maxlines=i'        => \$maxlines,
-  'taillines=i'       => \$taillines,
-  'follow'            => \$follow,
-  'hideraw!'          => \$hideraw,
-  'skipsource=s@'     => \@skipsources,
-  'stripu!'           => \$strip_u,
-  'highlightcontent!' => \$highlightcontent,
-  'debug!'            => \$debug
+  'maxlines=i'         => \$maxlines,
+  'taillines=i'        => \$taillines,
+  'follow'             => \$follow,
+  'hideraw!'           => \$hideraw,
+  'skipsource=s@'      => \@skipsources,
+  'skipmessagetype=s@' => \@skipmessages,
+  'stripu!'            => \$strip_u,
+  'highlightcontent!'  => \$highlightcontent,
+  'debug!'             => \$debug
 );
 
 print STDERR "Initializing...\n" if $debug;
@@ -53,27 +56,41 @@ if (-t STDOUT && (-t STDIN || $taillines) && !$follow)
 }
 
 my $valid_operations = join('|', qw(OPEN SENT RECV RCVD REST READ RETR RACK));
-my $valid_levels = join('|', qw(ERROR INFO DEBUG AUDIT));
+my $valid_levels = join('|', qw(ERROR INFO DEBUG AUDIT WARNING));
 
-sub print_detailed_msg($$$)
+sub print_detailed_msg($$$;$)
 {
-  my ($operation, $some_num, $body) = @_;
+  my ($operation, $some_num, $body) = (shift, shift, shift);
+  my $msg_type = shift or 0;
+
   print colored("$operation", 'magenta'), " ";
   print colored("[$some_num]", 'bold'), " ";
   $body =~ s/(content)=/colored($1, 'bold') . '='/e if ($highlightcontent);
-  print_msg_body($body)
+
+  if ($msg_type)
+  {
+    print_msg_body($body, $msg_type)
+  }
+  else
+  {
+    print_msg_body($body)
+  }
 }
 
-sub print_msg_body($)
+sub print_msg_body($;$)
 {
   my $body = shift;
+  my $msg_type = shift or 0;
   if ($strip_u) # waring: X-Rated code, viewer discretion advised
   {
     $body =~ s/u'(.+?)(?!\\)'/'$1'/g;
+
+    print colored($msg_type, 'bright_yellow') if $msg_type;
     print "$body\n";
   }
   else
   {
+    print colored($msg_type, 'bright_yellow') if $msg_type;
     print "$body\n";
   }
 
@@ -95,6 +112,10 @@ sub print_header($$$$$$)
   elsif ($lvl eq 'ERROR')
   {
     print colored($lvl, 'bold red');
+  }
+  elsif ($lvl eq 'WARNING')
+  {
+    print colored($lvl, 'bold magenta');
   }
   else
   {
@@ -131,17 +152,32 @@ LINE: while(<>)
 
   # my %line = (date => $date, time => $time, pid => $pid, level => $lvl, source => $src, req_id => $req_id, raw => $orig);
 
-  # print the header
-  print_header($date, $time, $pid, $lvl, $src, $req_id);
-
   if ($rest =~ /^($valid_operations)\[([a-f0-9]+)\]: (.+)$/)
   {
     # $line{msg} = {operation => $1, some_num => $2, body => $3};
-    print_detailed_msg($1, $2, $3)
+    my ($operation, $some_num, $body) = ($1, $2, $3);
+    if ($body =~ /^(\w+)(\(.+)$/)
+    {
+      my $msg_type = $1;
+      my $body = $2;
+      foreach my $skip_msg (@skipmessages)
+      {
+        next LINE if $msg_type =~ qr/^\Q$skip_msg\E$/;
+      }
+
+      print_header($date, $time, $pid, $lvl, $src, $req_id);
+      print_detailed_msg($operation, $some_num, $body, $msg_type);
+    }
+    else
+    {
+      print_header($date, $time, $pid, $lvl, $src, $req_id);
+      print_detailed_msg($operation, $some_num, $body)
+    }
   }
   else
   {
     # $line{msg} = {body => $rest};
+    print_header($date, $time, $pid, $lvl, $src, $req_id);
     print_msg_body($rest);
   }
 }
