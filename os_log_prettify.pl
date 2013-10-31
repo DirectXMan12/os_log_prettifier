@@ -29,6 +29,13 @@ GetOptions(
   'debug!'             => \$debug
 );
 
+  
+# Strip off quotes
+@skipsources = map { if (/^('|")(.+)\1$/) { $2 } else { $_ } } @skipsources;
+@skipmessages = map { if (/^('|")(.+)\1$/) { $2 } else { $_ } } @skipmessages;
+
+print STDERR "'$_'\n" foreach(@skipmessages);
+
 print STDERR "Initializing...\n" if $debug;
 
 if (($taillines || $follow) && $ARGV[0])
@@ -147,7 +154,7 @@ LINE: while(<>)
   next if $hideraw && $src =~ /^\w+\.messaging\.io\.raw$/;
   for my $skip_src (@skipsources)
   {
-    next LINE if $src =~ qr/^\Q$skip_src\E$/;
+    next LINE if $src =~ qr/^$skip_src$/;
   }
 
   # my %line = (date => $date, time => $time, pid => $pid, level => $lvl, source => $src, req_id => $req_id, raw => $orig);
@@ -162,7 +169,7 @@ LINE: while(<>)
       my $body = $2;
       foreach my $skip_msg (@skipmessages)
       {
-        next LINE if $msg_type =~ qr/^\Q$skip_msg\E$/;
+        next LINE if $msg_type =~ qr/^$skip_msg$/;
       }
 
       print_header($date, $time, $pid, $lvl, $src, $req_id);
