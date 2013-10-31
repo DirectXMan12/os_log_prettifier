@@ -9,16 +9,17 @@ Invocation
 ----------
 
 ```bash
-$ ./os_log_prettify [/path/to/file1.log] [/path/to/file2.log] ... [OPTIONS]
+$ ./os_log_prettify [/path/to/file.log] [OPTIONS]
 ```
 
-If files are specified, the contents are concatenated in the output.  Otherwise, STDIN is used.  Currently "streaming" to STDIN will not work.  When not used in a pipe, the contents will be output through `less`, if possible.
+If a file is not specified, STDIN is used.  "Streaming" pipes, such as from `tail -f`, are supported (in this case, outputting to `less` is not used).
 
 ### Options ###
 
-* `--maxlines=n` reads the first `n` lines from the from the input (treated as one big file)
-* `--taillines=n` reads the last `n` lines from *each* file in the input (must use files, not STDIN -- uses the `tail` program)
+* `--maxlines=n` reads the first `n` lines from the from the input, and then exits
+* `--taillines=n` reads the last `n` lines from the given file, and must be used with a filename
 * `--hideraw` (default) / `--nohideraw` hides (or shows, with the 'no' prefix) messages with a 'source' of '*.messaging.io.raw'
 * `--skipsource=regex` can be added one or more times to add regular expressions against which to match the 'source' of the message.  Matched 'sources' will have their messages hidden
 * `--stripu` (default) / `--nostipu` strips the 'u' (or does not) the 'u' prefix off of the front of unicode strings in the message body
 * `--highlightcontent` (default) / `--nohightlightcontent` makes the 'content=' key in the message body bold in appropriate messages
+* `--follow` uses tail to keep the file open, continuing to read as updates come in.  This may be used with `--taillines`, and must be used with a file
